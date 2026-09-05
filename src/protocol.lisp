@@ -4,17 +4,20 @@
   "Hint for which codec implementation is loaded. Methods live on ALGORITHM.")
 
 (defun %ensure-octets (data)
-  (etypecase data
-    ((vector (unsigned-byte 8)) data)
-    (string (encoding-protocol:encode data))
-    (stream
+  (cond
+    ((and (vectorp data) (not (stringp data)))
+     (coerce data '(simple-array (unsigned-byte 8) (*))))
+    ((stringp data) (encoding-protocol:encode data))
+    ((streamp data)
      (let ((out (make-array 0 :element-type '(unsigned-byte 8)
                             :adjustable t :fill-pointer 0))
            (buf (make-array 4096 :element-type '(unsigned-byte 8))))
        (loop for n = (read-sequence buf data)
              while (plusp n)
              do (loop for i below n do (vector-push-extend (aref buf i) out)))
-       (coerce out '(simple-array (unsigned-byte 8) (*)))))))
+       (coerce out '(simple-array (unsigned-byte 8) (*)))))
+    (t (error 'compression-error
+              :message (format nil "not octets, string, or stream: ~s" (type-of data))))))
 
 (defgeneric compress (data &key algorithm level)
   (:documentation "Compress DATA (octets, string, or stream) with ALGORITHM.
@@ -28,30 +31,6 @@
 
 (defgeneric make-decompressing-stream (input &key algorithm)
   (:documentation "Return a binary input stream of decompressed bytes from INPUT."))
-
-(defmethod compress (data &key algorithm level)
-  (declare (ignore data level))
-  (error 'unsupported-algorithm
-         :algorithm algorithm
-         :message (format nil "no compress method for ~s — load a compression backend" algorithm)))
-
-(defmethod decompress (data &key algorithm)
-  (declare (ignore data))
-  (error 'unsupported-algorithm
-         :algorithm algorithm
-         :message (format nil "no decompress method for ~s — load a compression backend" algorithm)))
-
-(defmethod make-compressing-stream (output &key algorithm level)
-  (declare (ignore output level))
-  (error 'unsupported-algorithm
-         :algorithm algorithm
-         :message (format nil "no compressing stream for ~s" algorithm)))
-
-(defmethod make-decompressing-stream (input &key algorithm)
-  (declare (ignore input))
-  (error 'unsupported-algorithm
-         :algorithm algorithm
-         :message (format nil "no decompressing stream for ~s" algorithm)))
 
 (defclass archive ()
   ((format :initarg :format :reader archive-format)
@@ -85,12 +64,6 @@
 
 (defgeneric write-entry (archive name data &key)
   (:documentation "Append NAME → DATA to a writable archive. Optional for read-only formats."))
-
-(defmethod open-archive (source &key (format :zip))
-  (declare (ignore source))
-  (error 'unsupported-algorithm
-         :algorithm format
-         :message (format nil "no archive format ~s" format)))
 
 (defmethod close-archive ((archive archive))
   (setf (archive-closed-p archive) t)
