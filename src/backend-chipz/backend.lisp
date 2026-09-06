@@ -32,35 +32,34 @@
     ((:zlib) *empty-zlib*)
     ((:deflate) *empty-deflate*)))
 
-(defmethod compress (data &key (algorithm :gzip) level)
-  (declare (ignore level))
-  (unless (member algorithm '(:gzip :x-gzip :zlib :deflate))
-    (error 'unsupported-algorithm :algorithm algorithm
-           :message (format nil "chipz backend cannot compress ~s" algorithm)))
+(defun %compress (algorithm data)
   (let ((octets (compression-protocol::%ensure-octets data)))
     (if (zerop (length octets))
         (%empty algorithm)
         (salza2:compress-data octets (%salza-compressor algorithm)))))
 
-(defmethod decompress (data &key (algorithm :gzip))
-  (unless (member algorithm '(:gzip :x-gzip :zlib :deflate))
-    (error 'unsupported-algorithm :algorithm algorithm
-           :message (format nil "chipz backend cannot decompress ~s" algorithm)))
+(defun %decompress (algorithm data)
   (chipz:decompress nil (%chipz-format algorithm)
                     (compression-protocol::%ensure-octets data)))
 
-(defmethod make-decompressing-stream (input &key (algorithm :gzip))
-  (unless (member algorithm '(:gzip :x-gzip :zlib :deflate))
-    (error 'unsupported-algorithm :algorithm algorithm
-           :message (format nil "chipz backend cannot decompress ~s" algorithm)))
-  (chipz:make-decompressing-stream (%chipz-format algorithm) input))
-
-(defmethod make-compressing-stream (output &key (algorithm :gzip) level)
-  (declare (ignore level))
-  (unless (member algorithm '(:gzip :x-gzip :zlib :deflate))
-    (error 'unsupported-algorithm :algorithm algorithm
-           :message (format nil "chipz backend cannot compress ~s" algorithm)))
-  (salza2:make-compressing-stream (%salza-compressor algorithm) output))
+(macrolet ((define-chipz-codec (algorithm)
+             `(progn
+                (defmethod compress-using-algorithm ((algorithm (eql ,algorithm)) data &key level)
+                  (declare (ignore level))
+                  (%compress ,algorithm data))
+                (defmethod decompress-using-algorithm ((algorithm (eql ,algorithm)) data &key)
+                  (%decompress ,algorithm data))
+                (defmethod make-decompressing-stream-using-algorithm
+                    ((algorithm (eql ,algorithm)) input &key)
+                  (chipz:make-decompressing-stream (%chipz-format ,algorithm) input))
+                (defmethod make-compressing-stream-using-algorithm
+                    ((algorithm (eql ,algorithm)) output &key level)
+                  (declare (ignore level))
+                  (salza2:make-compressing-stream (%salza-compressor ,algorithm) output)))))
+  (define-chipz-codec :gzip)
+  (define-chipz-codec :x-gzip)
+  (define-chipz-codec :zlib)
+  (define-chipz-codec :deflate))
 
 (defun use-chipz-backend ()
   (setf *compression-backend* :chipz)

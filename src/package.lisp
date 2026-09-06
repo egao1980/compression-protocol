@@ -13,6 +13,10 @@
            #:decompress
            #:make-compressing-stream
            #:make-decompressing-stream
+           #:compress-using-algorithm
+           #:decompress-using-algorithm
+           #:make-compressing-stream-using-algorithm
+           #:make-decompressing-stream-using-algorithm
 
            #:archive
            #:archive-format
