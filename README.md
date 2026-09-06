@@ -7,7 +7,8 @@ Codecs + zip archives for [cl-stack](https://github.com/egao1980/cl-stack). HTTP
 | `compression-protocol` | `compress` / `decompress`, stream GFs, `open-archive` (`:zip`) |
 | `compression-backend-chipz` | **Default** — chipz + salza2 for `:gzip` `:zlib` `:deflate` |
 
-`:br` / `:zstd` / `:snappy` wait for overlay backends. Nick `stack-compression`.
+`:br` / `:zstd` / `:snappy` come from `cl-stack-brotli` / `cl-stack-zstd` / `cl-stack-snappy`
+(eql methods on `compress-using-algorithm`). Nick `stack-compression`.
 
 ```lisp
 (asdf:load-system "compression-backend-chipz")

@@ -19,18 +19,58 @@
     (t (error 'compression-error
               :message (format nil "not octets, string, or stream: ~s" (type-of data))))))
 
-(defgeneric compress (data &key algorithm level)
-  (:documentation "Compress DATA (octets, string, or stream) with ALGORITHM.
-   ALGORITHM is :gzip, :deflate, :zlib, :br, :zstd, or :snappy."))
+(defgeneric compress-using-algorithm (algorithm data &key level)
+  (:documentation "Backend GF. Specialize ALGORITHM with EQL. Do not specialize COMPRESS."))
 
-(defgeneric decompress (data &key algorithm)
-  (:documentation "Decompress DATA (octets or stream) with ALGORITHM."))
+(defgeneric decompress-using-algorithm (algorithm data &key)
+  (:documentation "Backend GF. Specialize ALGORITHM with EQL. Do not specialize DECOMPRESS."))
 
-(defgeneric make-compressing-stream (output &key algorithm level)
-  (:documentation "Return a binary output stream: writes are compressed into OUTPUT."))
+(defgeneric make-compressing-stream-using-algorithm (algorithm output &key level)
+  (:documentation "Backend GF. Push compressed bytes into OUTPUT."))
 
-(defgeneric make-decompressing-stream (input &key algorithm)
-  (:documentation "Return a binary input stream of decompressed bytes from INPUT."))
+(defgeneric make-decompressing-stream-using-algorithm (algorithm input &key)
+  (:documentation "Backend GF. Pull decompressed bytes from INPUT."))
+
+(defmethod compress-using-algorithm (algorithm data &key level)
+  (declare (ignore data level))
+  (error 'unsupported-algorithm
+         :algorithm algorithm
+         :message (format nil "no compression backend for ~s" algorithm)))
+
+(defmethod decompress-using-algorithm (algorithm data &key)
+  (declare (ignore data))
+  (error 'unsupported-algorithm
+         :algorithm algorithm
+         :message (format nil "no decompression backend for ~s" algorithm)))
+
+(defmethod make-compressing-stream-using-algorithm (algorithm output &key level)
+  (declare (ignore output level))
+  (error 'unsupported-algorithm
+         :algorithm algorithm
+         :message (format nil "no compressing stream for ~s" algorithm)))
+
+(defmethod make-decompressing-stream-using-algorithm (algorithm input &key)
+  (declare (ignore input))
+  (error 'unsupported-algorithm
+         :algorithm algorithm
+         :message (format nil "no decompressing stream for ~s" algorithm)))
+
+(defun compress (data &key (algorithm :gzip) level)
+  "Compress DATA (octets, string, or stream) with ALGORITHM.
+   ALGORITHM is :gzip, :deflate, :zlib, :br, :zstd, or :snappy."
+  (compress-using-algorithm algorithm data :level level))
+
+(defun decompress (data &key (algorithm :gzip))
+  "Decompress DATA (octets or stream) with ALGORITHM."
+  (decompress-using-algorithm algorithm data))
+
+(defun make-compressing-stream (output &key (algorithm :gzip) level)
+  "Return a binary output stream: writes are compressed into OUTPUT."
+  (make-compressing-stream-using-algorithm algorithm output :level level))
+
+(defun make-decompressing-stream (input &key (algorithm :gzip))
+  "Return a binary input stream of decompressed bytes from INPUT."
+  (make-decompressing-stream-using-algorithm algorithm input))
 
 (defclass archive ()
   ((format :initarg :format :reader archive-format)
