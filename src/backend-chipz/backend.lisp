@@ -61,6 +61,19 @@
   (define-chipz-codec :zlib)
   (define-chipz-codec :deflate))
 
+(defmethod decompress-using-algorithm ((algorithm (eql :bzip2)) data &key)
+  (chipz:decompress nil 'chipz:bzip2
+                    (compression-protocol::%ensure-octets data)))
+
+(defmethod decompress-using-algorithm ((algorithm (eql :bz2)) data &key)
+  (decompress-using-algorithm :bzip2 data))
+
+(defmethod make-decompressing-stream-using-algorithm ((algorithm (eql :bzip2)) input &key)
+  (chipz:make-decompressing-stream 'chipz:bzip2 input))
+
+(defmethod make-decompressing-stream-using-algorithm ((algorithm (eql :bz2)) input &key)
+  (make-decompressing-stream-using-algorithm :bzip2 input))
+
 (defun use-chipz-backend ()
   (setf *compression-backend* :chipz)
   :chipz)
