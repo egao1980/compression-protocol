@@ -26,24 +26,19 @@
             68 160 0 48 205 0 195 70 41 151 23 114 69 56 80 144 193 192 128 226)
           '(simple-array (unsigned-byte 8) (*))))
 
+(defparameter *hello-lf*
+  (coerce #(104 101 108 108 111 10) '(simple-array (unsigned-byte 8) (*))))
+
 (deftest bzip2-decompress
-  (ok (equalp (encoding-protocol:encode "hello
-")
-              (decompress *hello-bz2* :algorithm :bzip2)))
-  (ok (equalp (encoding-protocol:encode "hello
-")
-              (decompress *hello-bz2* :algorithm :bz2)))
+  ;; Octets, not a source-file newline — Windows checkout is CRLF.
+  (ok (equalp *hello-lf* (decompress *hello-bz2* :algorithm :bzip2)))
+  (ok (equalp *hello-lf* (decompress *hello-bz2* :algorithm :bz2)))
   (ok (signals (compress "x" :algorithm :bzip2) 'unsupported-algorithm)))
 
 (deftest tar-bz2-open
-  (let* ((tar (write-archive-bytes '(("hi.txt" "hello
-")) :format :tar))
-         ;; wrap by shell-equivalent: we only have decompress, so build via
-         ;; known payload + open after gzip path already covered. Here just
-         ;; assert :tar.bz2 write is refused.
+  (let* ((tar (write-archive-bytes `(("hi.txt" ,*hello-lf*)) :format :tar))
          (archive (open-archive tar :format :tar)))
-    (ok (string= "hello
-" (encoding-protocol:decode (read-entry archive "hi.txt"))))
+    (ok (equalp *hello-lf* (read-entry archive "hi.txt")))
     (ok (signals (write-archive-bytes '(("a" "b")) :format :tar.bz2)
                  'unsupported-algorithm))))
 
