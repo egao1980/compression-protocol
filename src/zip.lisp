@@ -94,11 +94,7 @@
           (incf off (+ 46 name-len extra-len comment-len)))))
     (setf (zip-archive-entry-list archive) (nreverse entries))))
 
-(defmethod open-archive (source &key (format :zip))
-  (unless (eq format :zip)
-    (error 'unsupported-algorithm
-           :algorithm format
-           :message (format nil "no archive format ~s" format)))
+(defun %open-zip-archive (source)
   (let ((archive (make-instance 'zip-archive
                                 :format :zip
                                 :bytes (%source-bytes source))))
@@ -151,12 +147,9 @@
                                (ash crc -8))))
     (logxor crc #xffffffff)))
 
-(defun write-archive-bytes (entries &key (format :zip))
+(defun %write-zip-bytes (entries)
   "Build a stored (method 0) ZIP as a byte vector.
    ENTRIES is a list of (name string-or-octets)."
-  (unless (eq format :zip)
-    (error 'unsupported-algorithm :algorithm format
-           :message (format nil "write-archive-bytes: no format ~s" format)))
   (let ((out (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
         (centrals '()))
     (dolist (pair entries)
