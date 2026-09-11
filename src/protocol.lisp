@@ -58,7 +58,7 @@
 (defun compress (data &key (algorithm :gzip) level)
   "Compress DATA (octets, string, or stream) with ALGORITHM.
    ALGORITHM is :gzip, :deflate, :zlib, :br, :zstd, or :snappy.
-   :bzip2 / :bz2 are decompress-only in the chipz backend.")
+   :bzip2 / :bz2 are decompress-only in the chipz backend."
   (compress-using-algorithm algorithm data :level level))
 
 (defun decompress (data &key (algorithm :gzip))

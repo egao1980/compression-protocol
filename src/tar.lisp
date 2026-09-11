@@ -132,8 +132,8 @@
       (setf (aref header 263) (char-code #\0)
             (aref header 264) (char-code #\0))
       (%put-ascii header 345 155 prefix)
-      (let ((sum (%tar-checksum header))
-            (digits (format nil "~6,'0o" sum)))
+      (let* ((sum (%tar-checksum header))
+             (digits (format nil "~6,'0o" sum)))
         (loop for i from 0 below 6
               do (setf (aref header (+ 148 i)) (char-code (char digits i))))
         (setf (aref header 154) 0
