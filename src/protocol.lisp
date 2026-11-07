@@ -61,9 +61,30 @@
    :bzip2 / :bz2 are decompress-only in the chipz backend."
   (compress-using-algorithm algorithm data :level level))
 
-(defun decompress (data &key (algorithm :gzip))
-  "Decompress DATA (octets or stream) with ALGORITHM."
-  (decompress-using-algorithm algorithm data))
+(defun decompress (data &key (algorithm :gzip) max-output)
+  "Decompress DATA (octets or stream) with ALGORITHM.
+With MAX-OUTPUT, read through the backend's decompressing stream and stop
+past MAX-OUTPUT bytes, signalling COMPRESSION-LIMIT-EXCEEDED. A
+decompression bomb then never allocates more than MAX-OUTPUT + 1 bytes."
+  (if max-output
+      (%bounded-decompress data algorithm max-output)
+      (decompress-using-algorithm algorithm data)))
+
+(defun %bounded-decompress (data algorithm max-output)
+  (check-type max-output (integer 0))
+  (let* ((input (if (streamp data)
+                    data
+                    (%octet-input (%ensure-octets data))))
+         (stream (make-decompressing-stream-using-algorithm algorithm input))
+         (out (make-array (min max-output 65536) :element-type '(unsigned-byte 8)
+                                                 :adjustable t :fill-pointer 0))
+         (buf (make-array 8192 :element-type '(unsigned-byte 8))))
+    (loop for n = (read-sequence buf stream)
+          while (plusp n)
+          do (when (> (+ (length out) n) max-output)
+               (error 'compression-limit-exceeded :algorithm algorithm :limit max-output))
+             (loop for i below n do (vector-push-extend (aref buf i) out)))
+    (coerce out '(simple-array (unsigned-byte 8) (*)))))
 
 (defun make-compressing-stream (output &key (algorithm :gzip) level)
   "Return a binary output stream: writes are compressed into OUTPUT."

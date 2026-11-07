@@ -1,14 +1,15 @@
 (defsystem "compression-protocol"
-  :version "0.2.0"
+  :version "0.3.0"
   :description "CLOS compression codecs + zip/tar archive protocol for cl-stack"
   :author "egao1980"
   :license "MIT"
-  :depends-on ("encoding-protocol")
+  :depends-on ("encoding-protocol" "trivial-gray-streams")
   :properties (:cl-repo (:ci (:with ("compression-backend-chipz"))))
   :serial t
   :pathname "src"
   :components ((:file "package")
                (:file "conditions")
+               (:file "octet-stream")
                (:file "protocol")
                (:file "zip")
                (:file "tar"))
