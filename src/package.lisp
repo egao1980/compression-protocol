@@ -3,6 +3,8 @@
   (:nicknames #:stack-compression)
   (:export #:compression-error
            #:unsupported-algorithm
+           #:compression-limit-exceeded
+           #:compression-limit-exceeded-limit
            #:compression-error-message
            #:compression-error-algorithm
            #:archive-error
