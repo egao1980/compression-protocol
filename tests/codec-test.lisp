@@ -38,11 +38,12 @@
     (ok (= 1000 (handler-case (decompress bomb :algorithm :zlib :max-output 1000)
                   (compression-limit-exceeded (c) (compression-limit-exceeded-limit c)))))
     ;; A stream source works the same way.
-    (with-open-file (out "/tmp/cp-bomb.z" :direction :output :element-type '(unsigned-byte 8)
-                                          :if-exists :supersede)
-      (write-sequence bomb out))
-    (with-open-file (in "/tmp/cp-bomb.z" :element-type '(unsigned-byte 8))
-      (ok (= 1000000 (length (decompress in :algorithm :zlib :max-output 2000000)))))))
+    (uiop:with-temporary-file (:stream out :pathname path :element-type '(unsigned-byte 8)
+                               :type "z")
+      (write-sequence bomb out)
+      :close-stream
+      (with-open-file (in path :element-type '(unsigned-byte 8))
+        (ok (= 1000000 (length (decompress in :algorithm :zlib :max-output 2000000))))))))
 
 ;;; A backend that allocates up front sees the limit before reading input.
 (defvar *seen-max-output* :unset)
