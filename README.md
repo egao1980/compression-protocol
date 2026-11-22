@@ -25,6 +25,8 @@ Codecs + zip archives for [cl-stack](https://github.com/egao1980/cl-stack). HTTP
    (compression-protocol:open-archive tarball :format :tgz) "a.txt"))
 ```
 
+`decompress … :max-output N` reads through the backend's decompressing stream and signals `compression-limit-exceeded` past N bytes. N is also passed to `make-decompressing-stream-using-algorithm` as `:max-output`, so a backend that allocates up front (Snappy's declared length) can refuse before allocating. Incremental backends (chipz) ignore it.
+
 ZIP method 0 (stored) and 8 (deflate via the codec GFs). ustar read/write; `:tar.gz` / `:tgz` wrap gzip. `:bzip2` decompress only (no Lisp compressor). `:xz` stays overlay/unsupported.
 
 ## License
