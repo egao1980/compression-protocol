@@ -29,7 +29,11 @@
   (:documentation "Backend GF. Push compressed bytes into OUTPUT."))
 
 (defgeneric make-decompressing-stream-using-algorithm (algorithm input &key)
-  (:documentation "Backend GF. Pull decompressed bytes from INPUT."))
+  (:documentation "Backend GF. Pull decompressed bytes from INPUT.
+:MAX-OUTPUT, when given, is the caller's output limit. A backend that must
+allocate up front (e.g. from a declared length) checks it first and signals
+COMPRESSION-LIMIT-EXCEEDED; an incremental backend may ignore it. Every call
+accepts the key, since the default method names it."))
 
 (defmethod compress-using-algorithm (algorithm data &key level)
   (declare (ignore data level))
@@ -49,8 +53,8 @@
          :algorithm algorithm
          :message (format nil "no compressing stream for ~s" algorithm)))
 
-(defmethod make-decompressing-stream-using-algorithm (algorithm input &key)
-  (declare (ignore input))
+(defmethod make-decompressing-stream-using-algorithm (algorithm input &key max-output)
+  (declare (ignore input max-output))
   (error 'unsupported-algorithm
          :algorithm algorithm
          :message (format nil "no decompressing stream for ~s" algorithm)))
@@ -75,7 +79,8 @@ decompression bomb then never allocates more than MAX-OUTPUT + 1 bytes."
   (let* ((input (if (streamp data)
                     data
                     (%octet-input (%ensure-octets data))))
-         (stream (make-decompressing-stream-using-algorithm algorithm input))
+         (stream (make-decompressing-stream-using-algorithm algorithm input
+                                                            :max-output max-output))
          (out (make-array (min max-output 65536) :element-type '(unsigned-byte 8)
                                                  :adjustable t :fill-pointer 0))
          (buf (make-array 8192 :element-type '(unsigned-byte 8))))
@@ -90,9 +95,13 @@ decompression bomb then never allocates more than MAX-OUTPUT + 1 bytes."
   "Return a binary output stream: writes are compressed into OUTPUT."
   (make-compressing-stream-using-algorithm algorithm output :level level))
 
-(defun make-decompressing-stream (input &key (algorithm :gzip))
-  "Return a binary input stream of decompressed bytes from INPUT."
-  (make-decompressing-stream-using-algorithm algorithm input))
+(defun make-decompressing-stream (input &key (algorithm :gzip) max-output)
+  "Return a binary input stream of decompressed bytes from INPUT.
+MAX-OUTPUT is passed to the backend as its output limit (see
+MAKE-DECOMPRESSING-STREAM-USING-ALGORITHM)."
+  (if max-output
+      (make-decompressing-stream-using-algorithm algorithm input :max-output max-output)
+      (make-decompressing-stream-using-algorithm algorithm input)))
 
 (defclass archive ()
   ((format :initarg :format :reader archive-format)
