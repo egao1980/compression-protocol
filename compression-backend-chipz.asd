@@ -1,5 +1,5 @@
 (defsystem "compression-backend-chipz"
-  :version "0.1.2"
+  :version "0.2.1"
   :description "compression-protocol backend — chipz inflate + salza2 deflate (gzip/zlib/deflate) + bzip2 inflate"
   :author "egao1980"
   :license "MIT"
