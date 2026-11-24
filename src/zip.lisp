@@ -62,10 +62,10 @@ encoding-protocol has no CP437 yet (egao1980/encoding-protocol#4)."
 (defun %zip-need (bytes offset size what)
   "Signal ARCHIVE-ERROR unless the SIZE bytes of WHAT at OFFSET lie inside
 BYTES (Python's zipfile: BadZipFile)."
+  ;; One-line control string: ~ before a newline breaks on a CRLF checkout.
   (unless (<= (+ offset size) (length bytes))
     (error 'archive-error
-           :message (format nil "corrupt zip: ~a runs past the end of the archive ~
-                                 (~:d bytes at ~:d, archive ~:d bytes)"
+           :message (format nil "corrupt zip: ~a runs past the end of the archive (~:d bytes at ~:d, archive ~:d bytes)"
                             what size offset (length bytes)))))
 
 (defun %find-eocd (bytes)
