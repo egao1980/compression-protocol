@@ -38,9 +38,58 @@
         (%empty algorithm)
         (salza2:compress-data octets (%salza-compressor algorithm)))))
 
+;;; Data chipz cannot decode signals COMPRESSION-ERROR with chipz's own
+;;; condition as its CAUSE, so callers handle one protocol type (Python:
+;;; zlib.error / OSError). chipz signals CHIPZ-ERROR subclasses for every
+;;; decode failure it detects.
+
+(defun %corrupt (algorithm condition)
+  (error 'compression-error
+         :algorithm algorithm
+         :message (format nil "corrupt ~(~a~) data: ~a" algorithm condition)
+         :cause condition))
+
+(defmacro %translating-chipz-errors ((algorithm) &body body)
+  `(handler-case (progn ,@body)
+     (chipz:chipz-error (c) (%corrupt ,algorithm c))))
+
 (defun %decompress (algorithm data)
-  (chipz:decompress nil (%chipz-format algorithm)
-                    (compression-protocol::%ensure-octets data)))
+  (let ((octets (compression-protocol::%ensure-octets data)))
+    (%translating-chipz-errors (algorithm)
+      (if (member algorithm '(:bzip2 :bz2))
+          (chipz:decompress nil 'chipz:bzip2 octets)
+          (chipz:decompress nil (%chipz-format algorithm) octets)))))
+
+(defclass chipz-input-stream (trivial-gray-streams:fundamental-binary-input-stream)
+  ((inner :initarg :inner :reader %inner)
+   (algorithm :initarg :algorithm :reader %algorithm))
+  (:documentation "A chipz decompressing stream whose read errors signal
+COMPRESSION-ERROR."))
+
+(defmethod stream-element-type ((s chipz-input-stream)) '(unsigned-byte 8))
+
+(defmethod trivial-gray-streams:stream-read-byte ((s chipz-input-stream))
+  (%translating-chipz-errors ((%algorithm s))
+    (read-byte (%inner s) nil :eof)))
+
+(defmethod trivial-gray-streams:stream-read-sequence
+    ((s chipz-input-stream) sequence start end &key)
+  (%translating-chipz-errors ((%algorithm s))
+    (read-sequence sequence (%inner s) :start start :end (or end (length sequence)))))
+
+(defmethod close ((s chipz-input-stream) &key abort)
+  (close (%inner s) :abort abort)
+  (call-next-method))
+
+(defun %decompressing-stream (algorithm input)
+  (make-instance 'chipz-input-stream
+                 :algorithm algorithm
+                 :inner (%translating-chipz-errors (algorithm)
+                          (chipz:make-decompressing-stream
+                           (if (member algorithm '(:bzip2 :bz2))
+                               'chipz:bzip2
+                               (%chipz-format algorithm))
+                           input))))
 
 (macrolet ((define-chipz-codec (algorithm)
              `(progn
@@ -51,7 +100,7 @@
                   (%decompress ,algorithm data))
                 (defmethod make-decompressing-stream-using-algorithm
                     ((algorithm (eql ,algorithm)) input &key)
-                  (chipz:make-decompressing-stream (%chipz-format ,algorithm) input))
+                  (%decompressing-stream ,algorithm input))
                 (defmethod make-compressing-stream-using-algorithm
                     ((algorithm (eql ,algorithm)) output &key level)
                   (declare (ignore level))
@@ -62,17 +111,16 @@
   (define-chipz-codec :deflate))
 
 (defmethod decompress-using-algorithm ((algorithm (eql :bzip2)) data &key)
-  (chipz:decompress nil 'chipz:bzip2
-                    (compression-protocol::%ensure-octets data)))
+  (%decompress :bzip2 data))
 
 (defmethod decompress-using-algorithm ((algorithm (eql :bz2)) data &key)
-  (decompress-using-algorithm :bzip2 data))
+  (%decompress :bz2 data))
 
 (defmethod make-decompressing-stream-using-algorithm ((algorithm (eql :bzip2)) input &key)
-  (chipz:make-decompressing-stream 'chipz:bzip2 input))
+  (%decompressing-stream :bzip2 input))
 
 (defmethod make-decompressing-stream-using-algorithm ((algorithm (eql :bz2)) input &key)
-  (make-decompressing-stream-using-algorithm :bzip2 input))
+  (%decompressing-stream :bz2 input))
 
 (defun use-chipz-backend ()
   (setf *compression-backend* :chipz)

@@ -71,3 +71,39 @@
     (ok (= 100 (length (decompress bomb :algorithm :gzip :max-output 100))))
     (ok (streamp (make-decompressing-stream (compression-protocol::%octet-input bomb)
                                             :algorithm :gzip :max-output 100)))))
+
+(deftest corrupt-data-signals-compression-error
+  "compression-protocol#7: data chipz cannot decode signals COMPRESSION-ERROR
+   (its CAUSE the chipz condition), from DECOMPRESS, the bounded path and a
+   decompressing stream alike. zlib and gzip carry a checksum, so damage is
+   always found; raw deflate has none, and chipz may return bytes for it."
+  (let ((raw (encoding-protocol:encode (format nil "~{~a ~}" (loop for i below 400 collect i)))))
+    (flet ((outcome (thunk)
+             "NIL when THUNK returns, else the condition's type, or :chipz-cause for a
+              COMPRESSION-ERROR caused by a chipz condition."
+             (handler-case (progn (funcall thunk) nil)
+               (compression-error (e)
+                 (if (typep (compression-error-cause e) 'chipz:chipz-error)
+                     :chipz-cause
+                     (type-of e)))
+               (error (e) (type-of e)))))
+      (dolist (algorithm '(:deflate :zlib :gzip))
+        (let ((bad (copy-seq (compress raw :algorithm algorithm))))
+          (fill bad #xff :start (min 12 (1- (length bad))) :end (min 40 (length bad)))
+          (dolist (way (list (list "decompress" (lambda () (decompress bad :algorithm algorithm)))
+                             (list ":max-output"
+                                   (lambda () (decompress bad :algorithm algorithm
+                                                              :max-output 100000)))
+                             (list "stream"
+                                   (lambda ()
+                                     (let ((s (make-decompressing-stream
+                                               (compression-protocol::%octet-input bad)
+                                               :algorithm algorithm))
+                                           (buf (make-array 4096 :element-type '(unsigned-byte 8))))
+                                       (loop while (plusp (read-sequence buf s))))))))
+            (destructuring-bind (label thunk) way
+              (let ((got (outcome thunk)))
+                (ok (if (eq algorithm :deflate)
+                        (member got '(nil :chipz-cause))
+                        (eq got :chipz-cause))
+                    (format nil "~(~a~) ~a: ~s" algorithm label got))))))))))

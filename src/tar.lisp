@@ -108,14 +108,21 @@
                 :key #'archive-entry-name :test #'string=)
           (error 'archive-error :message (format nil "tar entry not found: ~a" entry)))))
 
-(defmethod read-entry ((archive tar-archive) entry)
+(defmethod read-entry ((archive tar-archive) entry &key max-size)
   (let ((ent (%find-tar-entry archive entry)))
     (when (archive-entry-directory-p ent)
       (error 'archive-error
              :message (format nil "not a file entry: ~a" (archive-entry-name ent))))
     (let ((off (archive-entry-header-offset ent))
-          (size (archive-entry-uncompressed-size ent)))
-      (subseq (tar-archive-bytes archive) off (+ off size)))))
+          (size (archive-entry-uncompressed-size ent))
+          (bytes (tar-archive-bytes archive)))
+      (when (and max-size (> size max-size))
+        (error 'compression-limit-exceeded :algorithm :tar :limit max-size))
+      (when (> (+ off size) (length bytes))
+        (error 'archive-error
+               :message (format nil "corrupt tar: ~a runs past the end of the archive"
+                                (archive-entry-name ent))))
+      (subseq bytes off (+ off size)))))
 
 (defun %write-tar-header (out name size typeflag)
   (multiple-value-bind (base prefix) (%tar-split-name name)
