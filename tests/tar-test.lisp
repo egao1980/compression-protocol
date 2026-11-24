@@ -35,6 +35,18 @@
   (ok (equalp *hello-lf* (decompress *hello-bz2* :algorithm :bz2)))
   (ok (signals (compress "x" :algorithm :bzip2) 'unsupported-algorithm)))
 
+(deftest bzip2-corrupt-signals-compression-error
+  "compression-protocol#7: bzip2 data chipz reports as damaged (a CHIPZ-ERROR)
+   signals COMPRESSION-ERROR with that condition as its CAUSE. chipz's bzip2
+   decoder signals plain SIMPLE-ERROR / TYPE-ERROR for most damaged bytes
+   instead (compression-protocol#8), so only truncation is checked here."
+  (dolist (end '(20 30))
+    (let ((e (handler-case (progn (decompress (subseq *hello-bz2* 0 end) :algorithm :bzip2) nil)
+               (error (e) e))))
+      (ok (and (typep e 'compression-error)
+               (typep (compression-error-cause e) 'chipz:chipz-error))
+          (format nil "truncated to ~d bytes: ~s" end (type-of e))))))
+
 (deftest tar-bz2-open
   (let* ((tar (write-archive-bytes `(("hi.txt" ,*hello-lf*)) :format :tar))
          (archive (open-archive tar :format :tar)))

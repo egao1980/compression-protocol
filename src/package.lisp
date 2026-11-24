@@ -7,6 +7,7 @@
            #:compression-limit-exceeded-limit
            #:compression-error-message
            #:compression-error-algorithm
+           #:compression-error-cause
            #:archive-error
 
            #:*compression-backend*

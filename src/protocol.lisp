@@ -86,9 +86,13 @@ decompression bomb then never allocates more than MAX-OUTPUT + 1 bytes."
          (buf (make-array 8192 :element-type '(unsigned-byte 8))))
     (loop for n = (read-sequence buf stream)
           while (plusp n)
-          do (when (> (+ (length out) n) max-output)
-               (error 'compression-limit-exceeded :algorithm algorithm :limit max-output))
-             (loop for i below n do (vector-push-extend (aref buf i) out)))
+          do (let ((length (length out)))
+               (when (> (+ length n) max-output)
+                 (error 'compression-limit-exceeded :algorithm algorithm :limit max-output))
+               (when (> (+ length n) (array-dimension out 0))
+                 (setf out (adjust-array out (max (+ length n) (* 2 (array-dimension out 0))))))
+               (setf (fill-pointer out) (+ length n))
+               (replace out buf :start1 length :end2 n)))
     (coerce out '(simple-array (unsigned-byte 8) (*)))))
 
 (defun make-compressing-stream (output &key (algorithm :gzip) level)
@@ -130,8 +134,14 @@ MAKE-DECOMPRESSING-STREAM-USING-ALGORITHM)."
 (defgeneric archive-entries (archive)
   (:documentation "List of ARCHIVE-ENTRY objects."))
 
-(defgeneric read-entry (archive entry)
-  (:documentation "Return uncompressed octets for ENTRY (an ARCHIVE-ENTRY or name string)."))
+(defgeneric read-entry (archive entry &key max-size)
+  (:documentation "Return uncompressed octets for ENTRY (an ARCHIVE-ENTRY or name string).
+A damaged archive or entry signals ARCHIVE-ERROR (a zip entry whose size or
+CRC-32 does not match its header offers CONTINUE, which returns the bytes
+anyway); data the codec cannot decode signals COMPRESSION-ERROR. MAX-SIZE,
+when given, bounds the entry's uncompressed size: past it,
+COMPRESSION-LIMIT-EXCEEDED, without inflating more than MAX-SIZE + 1
+bytes."))
 
 (defgeneric write-entry (archive name data &key)
   (:documentation "Append NAME → DATA to a writable archive. Optional for read-only formats."))

@@ -1,5 +1,5 @@
 (defsystem "compression-protocol"
-  :version "0.4.0"
+  :version "0.5.0"
   :description "CLOS compression codecs + zip/tar archive protocol for cl-stack"
   :author "egao1980"
   :license "MIT"
