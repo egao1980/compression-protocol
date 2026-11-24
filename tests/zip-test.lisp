@@ -97,6 +97,38 @@
                            (read-entry archive "s.txt"))))
           "CONTINUE returns the bytes anyway"))))
 
+(deftest zip-holding-a-stored-zip-uses-the-last-eocd
+  "compression-protocol#10: an archive that stores another zip uncompressed
+   (zipfile's default ZIP_STORED; an OOXML package with an embedded .xlsx)
+   holds the inner zip's end-of-central-directory record before its own.
+   zipfile._EndRecData takes the last record, so must OPEN-ARCHIVE."
+  (let* ((inner (%zip-with `(("xl/workbook.xml" ,(%text-octets 300) 8)
+                             ("[Content_Types].xml" ,(%text-octets 40) 0))))
+         (body (%text-octets 2000))
+         (outer (%zip-with `(("word/document.xml" ,body 8)
+                             ("word/embeddings/Microsoft_Excel_Worksheet.xlsx" ,inner 0))))
+         (commented (let ((comment (encoding-protocol:encode "written by zipfile")))
+                      (concatenate '(vector (unsigned-byte 8))
+                                   (subseq outer 0 (- (length outer) 2))
+                                   (vector (ldb (byte 8 0) (length comment))
+                                           (ldb (byte 8 8) (length comment)))
+                                   comment))))
+    (dolist (case (list (cons "no comment" outer) (cons "archive comment" commented)))
+      (destructuring-bind (label . zip) case
+        (let ((archive (open-archive zip :format :zip)))
+          (ok (equal '("word/document.xml" "word/embeddings/Microsoft_Excel_Worksheet.xlsx")
+                     (mapcar #'archive-entry-name (archive-entries archive)))
+              (format nil "~a: the outer central directory" label))
+          (ok (equalp body (read-entry archive "word/document.xml"))
+              (format nil "~a: deflated entry" label))
+          (let ((embedded (read-entry archive "word/embeddings/Microsoft_Excel_Worksheet.xlsx")))
+            (ok (equalp inner embedded) (format nil "~a: stored zip entry" label))
+            (ok (= 2 (length (archive-entries (open-archive embedded :format :zip))))
+                (format nil "~a: the embedded zip opens" label))))))
+    (ok (signals (open-archive (subseq outer 0 (- (length outer) 10)) :format :zip)
+          'archive-error)
+        "a record cut short at the end is not taken for the inner one")))
+
 (deftest zip-damaged-structure-signals-archive-error
   (let ((body (%text-octets 3000)))
     (flet ((damaged (fn)

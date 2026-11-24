@@ -69,14 +69,33 @@ BYTES (Python's zipfile: BadZipFile)."
                             what size offset (length bytes)))))
 
 (defun %find-eocd (bytes)
-  (let ((len (length bytes)))
-    (loop for i from (max 0 (- len 22 65535)) below (- len 21)
-          when (and (= (aref bytes i) #x50)
-                     (= (aref bytes (+ i 1)) #x4b)
-                     (= (aref bytes (+ i 2)) #x05)
-                     (= (aref bytes (+ i 3)) #x06))
-            do (return i)
-          finally (error 'archive-error :message "not a zip archive (EOCD missing)"))))
+  "Offset of BYTES' end-of-central-directory record, found as Python's
+zipfile._EndRecData does: the last 22 bytes when they are a record with no
+comment, else the LAST signature in the final 64 KiB + 22 bytes. The last
+one, not the first: an archive that stores another zip uncompressed (an
+OOXML package with an embedded .xlsx) holds that zip's record before its
+own. No signature, or one too close to the end for a whole record, signals
+ARCHIVE-ERROR (zipfile: BadZipFile)."
+  (flet ((signature-p (i)
+           (and (= (aref bytes i) #x50)
+                (= (aref bytes (+ i 1)) #x4b)
+                (= (aref bytes (+ i 2)) #x05)
+                (= (aref bytes (+ i 3)) #x06))))
+    (let* ((len (length bytes))
+           (tail (- len 22)))
+      (when (minusp tail)
+        (error 'archive-error :message "not a zip archive (EOCD missing)"))
+      (if (and (signature-p tail) (zerop (%u16 bytes (- len 2))))
+          tail
+          (let ((start (loop for i from (- len 4) downto (max 0 (- len 22 65536))
+                             when (signature-p i)
+                               return i)))
+            (cond ((null start)
+                   (error 'archive-error :message "not a zip archive (EOCD missing)"))
+                  ((> start tail)
+                   (error 'archive-error
+                          :message "corrupt zip: end of central directory record runs past the end of the archive"))
+                  (t start)))))))
 
 (defun %load-central-directory (archive)
   "Read ARCHIVE's central directory into its entry list. A record that runs
